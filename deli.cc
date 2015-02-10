@@ -4,10 +4,12 @@
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
+#include <vector>
+#include <cmath> 
 using namespace std;
 int CORKBOARD_CURRENT_CAPACITY = 0;
 int CORKBOARD_MAXCAPACITY;
-vector<int> corkboard; 
+std::vector<int> corkboard; 
 int NUM_CASHIERS;
 int LIVING_CASHIERS;
 unsigned int lock = 1;
@@ -38,7 +40,7 @@ void master_maker(void* args){
 	}
 	dthreads_lock(lock);
 	int last_sandwich = -1; //this is default
-	* int next_sandwich;
+	int * next_sandwich;
 	while(LIVING_CASHIERS>0){
 		if(LIVING_CASHIERS<CORKBOARD_MAXCAPACITY){
 			CORKBOARD_MAXCAPACITY=LIVING_CASHIERS;
@@ -50,14 +52,15 @@ void master_maker(void* args){
 		int sandwich_diff = 10000;
 		int indexof_next_sandwich;
 		for(int i = 0; i<corkboard.size(); i++){ //choose closest match in the board
-			if(std:abs (corkboard.at(i) - last_sandwich) < sandwich_diff)
+			if(std::abs (corkboard.at(i) - last_sandwich) < sandwich_diff)
 				indexof_next_sandwich = i;
 				sandwich_diff = std::abs (corkboard.at(i) - last_sandwich);
 		}
-		printf("Making Sandwich %d\n", corkboard[indexof_next_sandwich]);
-		CORKBOARD_CURRENT_CAPACITY--;
 		next_sandwich = &corkboard.at(indexof_next_sandwich);
-		corkboard.erase(corkboard.begin() + indexof_next_sandwich); //erase from
+		printf("Making Sandwich %d\n", * next_sandwich);
+		CORKBOARD_CURRENT_CAPACITY--;
+		dthreads_signal(lock, CORKBOARD_CURRENT_CAPACITY);
+		corkboard.erase(corkboard.begin() + indexof_next_sandwich); //erase from corkboard
 		dthreads_signal(lock, *next_sandwich); //not sure if this signalling will work.
 	}
 	dthreads_unlock(lock);
@@ -75,12 +78,13 @@ void cashier(void* args){
 		if(!stream1.eof() && !raw_order[0]==0){ //might be problematicly hardcoded for these specific test cases.	
 			int order_number = atoi(raw_order);
 			printf("%d\n",order_number);
-			while(CORKBOARD_CURRENT_CAPACITY == CORKBOARD_MAXCAPACITY){ //wait for spot on board to open up
-				dthreads_wait(lock, CORKBOARD_CURRENT_CAPACITY)
+			while(CORKBOARD_CURRENT_CAPACITY >= CORKBOARD_MAXCAPACITY){ //wait for spot on board to open up
+				dthreads_wait(lock, CORKBOARD_CURRENT_CAPACITY);
 				dthreads_lock(lock); // do we need this or is lock automatically handed back to us when signaled?
 			}
 			corkboard.push_back(order_number); //push to the board (maybe we implement the board using a global vector... google this.)
-			
+			CORKBOARD_CURRENT_CAPACITY++;
+			dthreads_signal(lock, CORKBOARD_CURRENT_CAPACITY);
 			dthreads_wait(lock, order_number); //I think that we push the order number and we wait for the order number to be signalled 
 			//wait for order to be taken (maybe sandwich is the CV and we wait for that to be brodcasted)
 			//...
