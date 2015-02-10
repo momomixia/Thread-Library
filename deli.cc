@@ -8,13 +8,11 @@ using namespace std;
 
 int CORKBOARD_MAXCAPACITY;
 int NUM_CASHIERS;
-
 void master_maker(void* args);
 void cashier(void* args);
 
 int main(int argc, char *argv[]){
 	int count; 
-	
 
 	if (argc > 1){
 		for (count = 2; count < argc; count++){
@@ -29,21 +27,20 @@ int main(int argc, char *argv[]){
 	dthreads_init((dthreads_func_t) master_maker, argv);
 }
 void master_maker(void* args){
-	char * filenames =  reinterpret_cast<char*>(args);
 	printf("master_maker thread started\n");
+	char ** filenames = (char **)(args); //Landon is a omniscient god.
 	for(int count = 2; count < NUM_CASHIERS+2; count++){
-
-		printf("%s", filenames[count]);
-		// dthreads_start((dthreads_func_t) cashier, (void *)(((char*)args)[count]));
+		printf("%s\n", filenames[count]);
+		dthreads_start((dthreads_func_t) cashier, (void *) filenames[count]);
 
 	}
 }
 void cashier(void* args){
 	printf("cashier is cashin\n");
 	//ifstream stream1(((char*)args)[0]);
-	char *array;
-   	array= (char*)args;
-   	printf("%s",array);
+	char *filename;
+   	filename= (char*)args;
+   	printf("%s\n",filename);
 	//printf("name of file: %s\n", ((char[] *)args));
 	// char a[80];
 
