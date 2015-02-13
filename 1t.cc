@@ -35,6 +35,10 @@ extern int dthreads_start(dthreads_func_t func, void *arg){
     new_context.uc_stack.ss_size = STACK_SIZE;
     new_context.uc_stack.ss_flags = 0;
     new_context.uc_link = NULL;
+
+
+    // do more set up before calling function, cause we are fucked once its called. it is killing itself and has nowhere to return to
+    //check piazza
     makecontext(&new_context, (void (*)()) func, 1, arg);
 
     
