@@ -1,0 +1,119 @@
+#include "1t.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <iostream>
+#include <fstream>
+#include <ucontext.h>
+#include <deque>
+#include <iterator>
+#include "interrupt.h"
+
+
+using namespace std;
+
+struct Thread{
+    int id;
+    char* stack;
+    ucontext_t *ucontext;
+    bool finished;
+}; 
+
+static ucontext_t *currentContext;
+
+static deque<Thread*> q;
+
+static void start (dthreads_func_t func, void *arg);
+
+void delete_current_thread(){
+
+}
+
+extern int dthreads_init(dthreads_func_t func, void * arg){
+    printf("initializing main thread\n");
+
+    currentContext = new ucontext_t;
+    getcontext(currentContext);
+
+    Thread* main = new Thread;
+    main->ucontext = new ucontext_t;
+    getcontext((main->ucontext));
+    main->id = 0;
+    main->stack = new char [STACK_SIZE];
+    main->ucontext->uc_stack.ss_sp = main->stack;
+    main->ucontext->uc_stack.ss_size = STACK_SIZE;
+    main->ucontext->uc_stack.ss_flags = 0;
+    main->ucontext->uc_link = NULL;
+
+    q.push_front(main);
+
+    makecontext((main->ucontext), (void (*)()) start, 2, func, arg);
+
+
+     while (q.size() > 0) {
+        if()
+    Thread* next = q.front();
+    q.pop_front();
+    swapcontext(currentContext, (next->ucontext));
+  }
+
+
+    printf("finishing main thread\n");
+}
+extern int dthreads_start(dthreads_func_t func, void *arg){
+	printf("starting new thread\n");
+	
+    currentContext = new ucontext_t;
+    getcontext(currentContext);
+
+    Thread *child  = new Thread;
+    child->ucontext = new ucontext_t;
+    getcontext((child->ucontext));
+    child->id = 0;
+    child->stack = new char [STACK_SIZE];
+    child->ucontext->uc_stack.ss_sp = child->stack;
+    child->ucontext->uc_stack.ss_size = STACK_SIZE;
+    child->ucontext->uc_stack.ss_flags = 0;
+    child->ucontext->uc_link = NULL;
+
+    q.push_back(child);
+
+    //current = child->ucontext;
+    //makecontext(&(child->ucontext), (void (*)()) func, 1, arg);
+    printf("bout to make context\n");
+    makecontext((child->ucontext), (void (*)()) start, 2, func, arg);
+    
+    //swapcontext(&(q.front()->ucontext), &(child->ucontext));
+
+
+    // do more set up before calling function, cause we are fucked once its called. 
+    //it is killing itself and has nowhere to return to
+    //check piazza
+
+   
+    // getcontext(&current_context);
+    // printf("After set new context\n");
+
+    // bool threadNotRun = 1;
+
+    //  getcontext(&current_context);
+    //  printf("about to call swap\n");
+    //  if( threadNotRun){
+    //     threadNotRun=0;
+     // printf("After swapcontext\n");
+     // }
+     // // setcontext(&current_context);
+      printf("done with this shit\n");
+}
+
+static void start(dthreads_func_t func, void *arg) {
+    interrupt_disable();
+    printf("execute function\n");
+    func(arg);
+    interrupt_enable();
+    
+    swapcontext((q.back()->ucontext), (currentContext));
+}
+extern int dthreads_yield(void){
+
+}
