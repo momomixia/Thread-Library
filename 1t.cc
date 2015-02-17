@@ -249,6 +249,12 @@ extern int dthreads_semup(unsigned int sem){
         return -1;
     }
 
+    //DETECT THAT SEMAPHORE HAS BEEN INITILIAZED
+    if(semMap.find(sem)==semMap.end()){
+        interrupt_enable();
+        return -1;
+    }
+
     
     if((semMap.at(sem)->semValue) == 0){
         //iterate thorugh blockedThreads, and transfer all threads with semID=sem to activeThreads
@@ -281,6 +287,12 @@ extern int dthreads_semup(unsigned int sem){
 
     //DETECT dthreads_init() NOT YET CALLED
     if(previousContext==NULL){
+        interrupt_enable();
+        return -1;
+    }
+
+    //DETECT THAT SEMAPHORE HAS BEEN INITILIAZED
+    if(semMap.find(sem)==semMap.end()){
         interrupt_enable();
         return -1;
     }
