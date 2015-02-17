@@ -1,3 +1,28 @@
+/*
+EXPECTED OUTPUT
+
+master thread started
+child 2 saved the day!!!
+method ended with master
+master thread ended
+method ended with child1
+Thread Library exiting.
+
+
+GENERATED OUTPUT
+
+master thread started
+child2 saved the day!!!
+method ended with master
+master thread ended.
+method ended with child1
+Thread library exiting.
+
+
+
+*/
+
+
 #include "1t.h"
 #include <stdio.h>
 #include <assert.h>
