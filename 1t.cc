@@ -120,7 +120,7 @@ extern int dthreads_init(dthreads_func_t func, void * arg){
         // Do we need to free up space from old threads?
     }
 
-    cout << "Thread library exiting. \n";
+    cout << "Thread library exiting.\n";
     exit(0);
 }
 
