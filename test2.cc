@@ -1,3 +1,10 @@
+/* TEST 2
+*  Create two threads, a parent thread and a child.  Using semaphores, parent thread calls semaphore down and waits, 
+*  child thread increments sempahore and finishes, then parent thread finishes. (optional call to yield)
+*/
+
+
+
 #include <stdlib.h>
 #include <iostream>
 #include "1t.h"
@@ -10,53 +17,47 @@ int g=0;
 void loop(void *a) {
   char *id;
   int i;
+  dthreads_init( (dthreads_func_t) loop, (void *) 100);
 
   id = (char *) a;
   cout <<"loop called with id " << (char *) id << endl;
 
-  //for (i=0; i<5; i++, g++) {
+  if(id=="parent thread"){
+   dthreads_semdown(1);
+   cout <<"unlocked but bout to yield " << endl;
+   dthreads_yield();
+ }
 
-    cout << id << ":\t" << "\t" << endl;
+ if(id=="child thread"){
+  dthreads_semup(1);
+  dthreads_yield();
+}
 
-     if(id=="parent thread"){
-       //cout <<"parent bout to get shackled " << endl;
-       dthreads_semdown(1);
+cout <<"finished " << (char *) id << endl;
 
-     }
-
-     if(id=="child thread"){
-    //   cout <<"child thread saves the day for daddy " << endl;
-       dthreads_semup(1);
-        cout <<"child thread did it " << endl;
-       dthreads_yield();
-     }
-
-    // if (dthreads_yield()) {
-    //   cout << "dthreads_yield failed\n";
-    //   exit(1);
-    // }
-    cout <<"finished " << (char *) id << endl;
-  //}
-    return;
+return;
 }
 
 void parent(void *a) {
-  dthreads_seminit(1,1);
-
+  dthreads_seminit(1,0);
+  dthreads_seminit(1,0);
   int arg;
   arg = (int) a;
 
   cout << "parent called with arg " << arg << endl;
   if (dthreads_start((dthreads_func_t) loop, 
-                     (void *) "child thread")) {
+   (void *) "child thread")) {
     cout << "dthreads_start failed\n";
-    exit(1);
-  }
+  exit(1);
+}
 
-  loop( (void *) "parent thread");
+
+loop( (void *) "parent thread");
 }
 
 int main(int argc, char *argv[]) {
+
+  dthreads_start((dthreads_func_t) loop, (void *) "child thread");
   if (dthreads_init( (dthreads_func_t) parent, (void *) 100)) {
     cout << "dthreads_init failed\n";
     exit(1);

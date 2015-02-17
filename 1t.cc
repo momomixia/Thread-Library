@@ -13,9 +13,8 @@
 using namespace std;
 
 struct Thread{
-    int threadID; // Do we need this?
-    char *stack;
     ucontext_t *ucontext;
+    char *stack;
     unsigned int semID;
 }; 
 
@@ -23,8 +22,6 @@ struct Semaphore{
     int semID;
     int semValue;
 };
-
-static int GLOBAL_THREAD_ID = 1; 
 
 static ucontext_t *previousContext;
 
@@ -34,47 +31,91 @@ static deque<Thread*> blockedThreads;
 
 static map<unsigned int, Semaphore * > semMap;
 
-static void start (dthreads_func_t func, void *arg);
+static int start (dthreads_func_t func, void *arg);
 
 extern int dthreads_init(dthreads_func_t func, void * arg){
     interrupt_disable();
 
-    Thread* main = new Thread;
+    //DETECT MULTIPLE CALLS TO dthreads_init()
+    if(previousContext!=NULL){
+        interrupt_enable();
+        return -1;
+    }
 
-    main->ucontext = new ucontext_t;
-    getcontext((main->ucontext));
+    Thread* main;
+    try{
+        main = new Thread;
+        main->ucontext = new ucontext_t;
+        main->stack = new char [STACK_SIZE];
+    }
+    catch (std::bad_alloc& ba){
+        interrupt_enable();
+        return -1;
+    }
 
-    main->threadID = 0;
+    
 
-    main->stack = new char [STACK_SIZE];
+    //DETECT BAD getcontext() CALL
+    if(getcontext((main->ucontext))==-1){
+        interrupt_enable();
+        return -1;
+    }
+
+    
     main->ucontext->uc_stack.ss_sp = main->stack;
     main->ucontext->uc_stack.ss_size = STACK_SIZE;
     main->ucontext->uc_stack.ss_flags = 0;
     main->ucontext->uc_link = NULL;
 
-    main->semID = 0;
+    main->semID = -1;
+
 
     makecontext((main->ucontext), (void (*)()) start, 2, func, arg);
 
     activeThreads.push_front(main);
 
-    interrupt_enable();
+    //interrupt_enable();
 
     currentThread = activeThreads.front();
     activeThreads.pop_front();
-    
-    previousContext = new ucontext_t;
-    getcontext(previousContext);
-    
-    interrupt_disable();
 
-    swapcontext(previousContext, main->ucontext);
+    try{
+        previousContext = new ucontext_t;
+        previousContext->uc_stack.ss_sp = new char [STACK_SIZE];
+    }
+    catch (std::bad_alloc& ba){
+        interrupt_enable();
+        return -1;
+    }
+
+    //DETECT BAD getcontext() CALL
+    if(getcontext(previousContext)==-1){
+        interrupt_enable();
+        return -1;
+    }
+
+
+    previousContext->uc_stack.ss_size = STACK_SIZE;
+    previousContext->uc_stack.ss_flags = 0;
+    previousContext->uc_link = NULL;
+    
+    //interrupt_disable();
+
+    //DETECT BAD swapcontext() CALL
+    if(swapcontext(previousContext, main->ucontext)==-1){
+        interrupt_enable();
+        return -1;
+    }
 
     while (activeThreads.size() > 0) {
         currentThread = activeThreads.front();
         activeThreads.pop_front();
 
-        swapcontext(previousContext, (currentThread->ucontext));
+        //DETECT BAD swapcontext() CALL
+        if(swapcontext(previousContext, (currentThread->ucontext))==-1){
+            interrupt_enable();
+            return -1;
+        }
 
         // Do we need to free up space from old threads?
     }
@@ -86,21 +127,35 @@ extern int dthreads_init(dthreads_func_t func, void * arg){
 extern int dthreads_start(dthreads_func_t func, void *arg){
    interrupt_disable();
 
-   Thread* child = new Thread;
+    //DETECT dthreads_init() NOT YET CALLED
+    if(previousContext==NULL){
+        interrupt_enable();
+        return -1;
+    }
 
-   child->ucontext = new ucontext_t;
-   getcontext((child->ucontext));
+    Thread* child;
+    try{
+        child = new Thread;
+        child->ucontext = new ucontext_t;
+        child->stack = new char [STACK_SIZE];
+    }
+    catch (std::bad_alloc& ba){
+        interrupt_enable();
+        return -1;
+    }
 
-   child->threadID = GLOBAL_THREAD_ID;
-   GLOBAL_THREAD_ID ++;
+   //DETECT BAD getcontext() CALL
+   if(getcontext((child->ucontext))==-1){
+        interrupt_enable();
+        return -1;
+   }
 
-   child->stack = new char [STACK_SIZE];
    child->ucontext->uc_stack.ss_sp = child->stack;
    child->ucontext->uc_stack.ss_size = STACK_SIZE;
    child->ucontext->uc_stack.ss_flags = 0;
    child->ucontext->uc_link = NULL;
 
-   child->semID = 0;
+   child->semID = -1;
 
    makecontext((child->ucontext), (void (*)()) start, 2, func, arg);
 
@@ -110,32 +165,75 @@ extern int dthreads_start(dthreads_func_t func, void *arg){
    return 0;
 }
 
-static void start(dthreads_func_t func, void *arg) {
+static int start(dthreads_func_t func, void *arg) {
+    //DETECT dthreads_init() NOT YET CALLED
+    if(previousContext==NULL){
+        interrupt_enable();
+        return -1;
+    }
+
     interrupt_enable();
     func(arg);
     interrupt_disable();
 
-    swapcontext((currentThread->ucontext),(previousContext));
+    //DETECT BAD swapcontext() CALL
+    if(swapcontext((currentThread->ucontext),(previousContext))==-1){
+        interrupt_enable();
+        return -1;
+    }
 }
-
 
 extern int dthreads_yield(void){
     interrupt_disable();
+
+    //DETECT dthreads_init() NOT YET CALLED
+    if(previousContext==NULL){
+        interrupt_enable();
+        return -1;
+    }
     activeThreads.push_back(currentThread);
-    swapcontext(currentThread->ucontext, previousContext);
+
+    //DETECT BAD swapcontext() CALL
+    if(swapcontext((currentThread->ucontext),(previousContext))==-1){
+        interrupt_enable();
+        return -1;
+    }
+
     interrupt_enable();
     return 0;
 }
-
 
 /* dthreads_seminit: takes an initial value for a semaphore and returns
  * a unique semaphore identifier or -1 for an error */
 extern int dthreads_seminit(unsigned int sem, unsigned int value){
     interrupt_disable();
-    Semaphore* currentSemaphore = new Semaphore;
-    currentSemaphore ->  semID = sem;
+
+    //DETECT dthreads_init() NOT YET CALLED
+    if(previousContext==NULL){
+        interrupt_enable();
+        return -1;
+    }
+
+    //DETECT SEMAPHORE ALREADY INITIALIZED
+    if(semMap.find(sem)!=semMap.end()){
+        interrupt_enable();
+        return -1;
+    }
+
+    Semaphore* currentSemaphore;
+    try{
+        currentSemaphore = new Semaphore;
+    }
+    catch (std::bad_alloc& ba){
+        interrupt_enable();
+        return -1;
+    }
+    
+    currentSemaphore -> semID = sem;
     currentSemaphore -> semValue = value;
+
     semMap.insert(make_pair(currentSemaphore->semID,currentSemaphore));
+
     interrupt_enable();
     return 0;
 }
@@ -144,13 +242,20 @@ extern int dthreads_seminit(unsigned int sem, unsigned int value){
  * increments its value */
 extern int dthreads_semup(unsigned int sem){
     interrupt_disable();
+
+    //DETECT dthreads_init() NOT YET CALLED
+    if(previousContext==NULL){
+        interrupt_enable();
+        return -1;
+    }
+
+    
     if((semMap.at(sem)->semValue) == 0){
-        //iterate thorugh blockedThreads, and erase all threads with same semID
+        //iterate thorugh blockedThreads, and transfer all threads with semID=sem to activeThreads
         std::deque<Thread*>::iterator it = blockedThreads.begin();
         while (it != blockedThreads.end()){
             if (((*it)->semID) == sem){
-                (*it)->semID=0;
-
+                (*it)->semID=-1;
                 activeThreads.push_back(*it);
                 it = blockedThreads.erase(it);
             }
@@ -161,10 +266,10 @@ extern int dthreads_semup(unsigned int sem){
     }    
 
     (semMap.at(sem)->semValue)++;
+
     interrupt_enable();
     return 0;
 }
-
 
 /* dthreads_semdown: takes the identifier for an initialized semaphore
  * and returns after the semaphore's value has been decremented by
@@ -173,10 +278,17 @@ extern int dthreads_semup(unsigned int sem){
  * an error */ 
  extern int dthreads_semdown(unsigned int sem){
     interrupt_disable();
-    if ((semMap.at(sem)->semValue) > 0){
 
-        if(semMap.at(sem)->semValue == 1){
-            (semMap.at(sem)->semValue)--;
+    //DETECT dthreads_init() NOT YET CALLED
+    if(previousContext==NULL){
+        interrupt_enable();
+        return -1;
+    }
+
+    
+
+    if ((semMap.at(sem)->semValue) >= 0){
+        if(semMap.at(sem)->semValue == 0){
             std::deque<Thread*>::iterator it = activeThreads.begin();
 
             while (it != activeThreads.end()){
@@ -189,15 +301,22 @@ extern int dthreads_semup(unsigned int sem){
                     ++it;
                 }
             }
+
             currentThread->semID=sem;
             blockedThreads.push_back(currentThread);
-            currentThread = activeThreads.front(); 
-            activeThreads.pop_front();
 
-            swapcontext(previousContext, (currentThread->ucontext));
-            interrupt_enable();
-            return 0;
+
+            //DETECT BAD swapcontext() CALL
+            if(swapcontext((currentThread->ucontext),(previousContext))==-1){
+                interrupt_enable();
+                return -1;
+            }        
         }
+        else {
+            (semMap.at(sem)->semValue)--;
+        }
+        interrupt_enable();
+        return 0;
     } else{
      interrupt_enable(); 
      return -1;
