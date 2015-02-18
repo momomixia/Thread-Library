@@ -23,18 +23,20 @@ GENERATED OUTPUT
 
 master thread started
 master thread about to wait on sempahore 2
+failed to initialize semaphore 4
 child thread calling semup on sempahore 2, adding master thread to Active Q
 child thread acquiring lock on sempahore 4
 child thread acquiring lock on sempahore 2
-child thread waiting on sempahore 4
 master thread resumed
 master thread calling semup on semaphore 4, adding child thread to Active Q
 master thread ended
 main master thread ended.
-child thread resumed
-child thread ended
 Thread library exiting.
 */
+
+//If I'm reading this correctly, then master should exit semdown(2) before the child. Your semaphores do not seem to ensure FIFO acquisition order.
+
+
 
 #include "1t.h"
 #include <stdio.h>
@@ -53,6 +55,12 @@ int main(int argc, char *argv[]){
 }
 void master_thread(void * args){
 	cout << "master thread started\n";
+	if(dthreads_semup(1)){
+		cout << "could not semup 1 because not yet initialized";
+	}
+	if(dthreads_semdown(1)){
+		cout << "could not semdown 1 because not yet initialized";
+	}
 	dthreads_seminit(1,1);
 	dthreads_seminit(2,0);
 	dthreads_seminit(3,3);
@@ -65,8 +73,7 @@ void master_thread(void * args){
 void child_thread(void * args){
 	char * id = (char *) args;
 	if(dthreads_seminit(4,2)){
-		cout << "failed to initialize semaphore 4";
-		exit(1);
+		cout << "failed to initialize semaphore 4\n";
 	}
 
 	if(id=="master"){

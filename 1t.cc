@@ -15,6 +15,7 @@ using namespace std;
 struct Thread{
     ucontext_t *ucontext;
     char *stack;
+    int completed;
     unsigned int semID;
 }; 
 
@@ -47,6 +48,7 @@ extern int dthreads_init(dthreads_func_t func, void * arg){
         main = new Thread;
         main->ucontext = new ucontext_t;
         main->stack = new char [STACK_SIZE];
+        main->completed = 0;
     }
     catch (std::bad_alloc& ba){
         interrupt_enable();
@@ -67,7 +69,7 @@ extern int dthreads_init(dthreads_func_t func, void * arg){
     main->ucontext->uc_stack.ss_flags = 0;
     main->ucontext->uc_link = NULL;
 
-    main->semID = -1;
+    main->semID = 9917;
 
 
     makecontext((main->ucontext), (void (*)()) start, 2, func, arg);
@@ -108,6 +110,18 @@ extern int dthreads_init(dthreads_func_t func, void * arg){
     }
 
     while (activeThreads.size() > 0) {
+
+        //CLEANUP FINISHED THREADS
+        if(currentThread->completed){
+            delete currentThread->stack;
+            currentThread->ucontext->uc_stack.ss_sp=NULL;
+            currentThread->ucontext->uc_stack.ss_size=0;
+            currentThread->ucontext->uc_stack.ss_flags=0;
+            delete currentThread->ucontext;
+            delete currentThread;
+            currentThread=NULL;
+        }
+
         currentThread = activeThreads.front();
         activeThreads.pop_front();
 
@@ -117,9 +131,20 @@ extern int dthreads_init(dthreads_func_t func, void * arg){
             return -1;
         }
 
-        // Do we need to free up space from old threads?
     }
 
+    //CLEANUP MAIN THREAD AFTER ALL ACTIVE THREADS COMPLETE
+    if(currentThread){
+        delete currentThread->stack;
+        currentThread->ucontext->uc_stack.ss_sp=NULL;
+        currentThread->ucontext->uc_stack.ss_size=0;
+        currentThread->ucontext->uc_stack.ss_flags=0;
+        delete currentThread->ucontext;
+        delete currentThread;
+        currentThread=NULL;
+    }
+    blockedThreads.clear();
+    semMap.clear();
     cout << "Thread library exiting.\n";
     exit(0);
 }
@@ -138,6 +163,7 @@ extern int dthreads_start(dthreads_func_t func, void *arg){
         child = new Thread;
         child->ucontext = new ucontext_t;
         child->stack = new char [STACK_SIZE];
+        child->completed=0;
     }
     catch (std::bad_alloc& ba){
         interrupt_enable();
@@ -155,7 +181,7 @@ extern int dthreads_start(dthreads_func_t func, void *arg){
    child->ucontext->uc_stack.ss_flags = 0;
    child->ucontext->uc_link = NULL;
 
-   child->semID = -1;
+   child->semID = 9917;
 
    makecontext((child->ucontext), (void (*)()) start, 2, func, arg);
 
@@ -175,6 +201,7 @@ static int start(dthreads_func_t func, void *arg) {
     interrupt_enable();
     func(arg);
     interrupt_disable();
+    currentThread->completed=1;
 
     //DETECT BAD swapcontext() CALL
     if(swapcontext((currentThread->ucontext),(previousContext))==-1){
@@ -220,6 +247,12 @@ extern int dthreads_seminit(unsigned int sem, unsigned int value){
         return -1;
     }
 
+    //DETECT VALID VALUE FOR SEMAPHORE
+    if(value<0){
+        interrupt_enable;
+        return -1;
+    }
+
     Semaphore* currentSemaphore;
     try{
         currentSemaphore = new Semaphore;
@@ -257,21 +290,31 @@ extern int dthreads_semup(unsigned int sem){
 
     
     if((semMap.at(sem)->semValue) == 0){
+        int count = 0;
         //iterate thorugh blockedThreads, and transfer all threads with semID=sem to activeThreads
         std::deque<Thread*>::iterator it = blockedThreads.begin();
         while (it != blockedThreads.end()){
             if (((*it)->semID) == sem){
-                (*it)->semID=-1;
+                count++;
+                (*it)->semID=9917; //Random Number
                 activeThreads.push_back(*it);
                 it = blockedThreads.erase(it);
+                break;
             }
             else {
                 ++it;
             }  
         }
-    }    
+        if(count==0){
+            (semMap.at(sem)->semValue)++;        
+        }
 
-    (semMap.at(sem)->semValue)++;
+
+    }    
+    else{
+        (semMap.at(sem)->semValue)++;    
+    }
+    
 
     interrupt_enable();
     return 0;

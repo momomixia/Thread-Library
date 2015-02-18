@@ -32,6 +32,9 @@ void loop(void *a) {
 void parent(void *a) {
   int arg;
   arg = (int) a;
+  if(dthreads_seminit(1, -5)){
+    cout << "failed to initialize semaphore with initial value -5";
+  }
 
   cout << "parent called with arg " << arg << endl;
   if (dthreads_start((dthreads_func_t) loop, 

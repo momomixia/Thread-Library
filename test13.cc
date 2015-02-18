@@ -1,27 +1,12 @@
+
 /*
-EXPECTED OUTPUT
-
-master thread started
-child 2 saved the day!!!
-method ended with master
-master thread ended
-method ended with child1
-Thread Library exiting.
-
-
-GENERATED OUTPUT
-
 master thread started
 child2 saved the day!!!
 method ended with master
 master thread ended.
+method ended with child1
 Thread library exiting.
-
-
-
-
 */
-
 
 #include "1t.h"
 #include <stdio.h>
@@ -52,11 +37,15 @@ void child_thread(void * args){
 	char * id = (char *) args;
 
 	if(id=="child1"){
+		dthreads_semup(2);
 		dthreads_semdown(2);
 	}
 	if(id=="master"){
+		dthreads_semup(2);
+		dthreads_semdown(2);
 		dthreads_semdown(2);
 	}
+
 
 	if(id=="child2"){
 		cout << "child2 saved the day!!!" << endl;
